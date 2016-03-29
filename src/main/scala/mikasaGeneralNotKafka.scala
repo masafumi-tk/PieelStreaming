@@ -15,16 +15,12 @@ import org.atilika.kuromoji.{Token, Tokenizer}
  * ref:http://www.intellilink.co.jp/article/column/bigdata-kk01.html
  */
 object MikasaGeneralNotKafka {
-
   /**
    *
    * @param args args(0)=application.properties path (default config/application.properties)
    */
   def main(args: Array[String]): Unit = {
-
-
     //--- Kafka Client Init End
-
     var configFileName = "config/application.properties"
 
     if (args.length == 1) {
@@ -61,21 +57,20 @@ object MikasaGeneralNotKafka {
     // println(searchWordList(0))
 
     val stream = TwitterUtils.createStream(ssc, None, searchWordList)
-
     // Twitterから取得したツイートを処理する
     val tweetStream = stream.flatMap(status => {
 
 //      val tokenizer : Tokenizer = CustomTwitterTokenizer.builder().build()  // kuromojiの分析器
       val features : scala.collection.mutable.ArrayBuffer[String] = new collection.mutable.ArrayBuffer[String]() //解析結果を保持するための入れ物
       var tweetText : String = status.getText() //ツイート本文の取得
-
+      print(tweetText)
       val japanese_pattern : Pattern = Pattern.compile("[¥¥u3040-¥¥u309F]+") //「ひらがなが含まれているか？」の正規表現
       if(japanese_pattern.matcher(tweetText).find()) {  // ひらがなが含まれているツイートのみ処理
         // 不要な文字列の削除
         tweetText = tweetText.replaceAll("http(s*)://(.*)/", "").replaceAll("¥¥uff57", "") // 全角の「ｗ」は邪魔www
 
         // ツイート本文の解析
-        val tokens : java.util.List[Token] = CustomTwitterTokenizer2.tokenize(tweetText, dictFilePath)
+        val tokens : java.util.List[Token] = CustomTwitterTokenizer4.tokenize(tweetText, dictFilePath)
         val pattern : Pattern = Pattern.compile("^[a-zA-Z]+$|^[0-9]+$") //「英数字か？」の正規表現
         for(index <- 0 to tokens.size()-1) { //各形態素に対して。。。
         val token = tokens.get(index)
@@ -107,7 +102,7 @@ object MikasaGeneralNotKafka {
 
     // ウインドウ集計（行末の括弧の位置はコメントを入れるためです、気にしないで下さい。）
     val topCounts60 = tweetStream.map((_, 1)                      // 出現回数をカウントするために各単語に「1」を付与
-    ).reduceByKeyAndWindow(_+_, Seconds(60*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
+    ).reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
       ).map{case (topic, count) => (count, topic)  // 単語の出現回数を集計
     }.transform(_.sortByKey(true))               // ソート
 
@@ -136,18 +131,13 @@ object MikasaGeneralNotKafka {
       // TOPスコア順にワードを送信
       println(sendMsg.toString())
     })
-
-
     ssc.start()
     ssc.awaitTermination()
-
   }
 
 }
-
-object CustomTwitterTokenizer2 {
-
-  def tokenize(text: String, dictPath: String): java.util.List[Token]  = {
+object CustomTwitterTokenizer4 {
+  def tokenize(text: String, dictPath: String): java.util.List[Token] = {
     Tokenizer.builder().mode(Tokenizer.Mode.SEARCH)
       .userDictionary(dictPath)
       .build().tokenize(text)
