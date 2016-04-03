@@ -1,12 +1,15 @@
-import java.io.{InputStreamReader, FileInputStream}
+import java.io.{FileInputStream, InputStreamReader}
 import java.util.Properties
 import java.util.regex.{Matcher, Pattern}
+
 import scala.collection.mutable.HashMap
 import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
 import org.apache.spark.streaming.twitter.TwitterUtils
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.atilika.kuromoji.{Token, Tokenizer}
+
+import scala.collection.mutable
 
 
 /**
@@ -20,6 +23,7 @@ object PieelStreaming {
    *
    * @param args args(0)=application.properties path (default config/application.properties)
    */
+
   def main(args: Array[String]): Unit = {
     //--- Kafka Client Init End
     var configFileName: String = "config/application.properties"
@@ -58,21 +62,19 @@ object PieelStreaming {
 
     val stream = TwitterUtils.createStream(ssc, None, searchWordList)   //サーチしたい単語がある時
     //val stream = TwitterUtils.createStream(ssc, None) //ランダムに集計したい時
-    var feelingScore : Integer  = null
 
     // Twitterから取得したツイートを処理する
     val tweetStream = stream.flatMap(status => {
 
       //val tokenizer : Tokenizer = CustomTwitterTokenizer.builder().build()  // kuromojiの分析器
       val features : scala.collection.mutable.ArrayBuffer[String] = new collection.mutable.ArrayBuffer[String]() //解析結果を保持するための入れ物
-      val featuresFeeling : scala.collection.mutable.HashMap[String,Double] = new collection.mutable.HashMap  [String,Double]() //解析結果を保持するための入れ物
       var tweetText : String = status.getText() //ツイート本文の取得
       val japanese_pattern : Pattern = Pattern.compile("[¥¥u3040-¥¥u309F]+") //「ひらがなが含まれているか？」の正規表現
+      var feelingscore :Double = 0
       if(japanese_pattern.matcher(tweetText).find()) {  // ひらがなが含まれているツイートのみ処理
+        feelingscore = FeelingDictionary.getFellingScore(tweetText) //tweet感情解析
         // 不要な文字列の削除
         tweetText = tweetText.replaceAll("http(s*)://(.*)/", "").replaceAll("¥¥uff57", "") // 全角の「ｗ」は邪魔www
-
-        //感情解析
 
         // ツイート本文の解析
         val tokens : java.util.List[Token] = CustomTwitterTokenizer.tokenize(tweetText, dictFilePath)
@@ -80,24 +82,26 @@ object PieelStreaming {
         for(index <- 0 to tokens.size()-1) { //各形態素に対して。。。
         val token = tokens.get(index)
 
-          // 英単語文字を排除したい場合はこれを使う
+          // 英単語文字を排除したい場合hはこれを使う
           val matcher : Matcher = pattern.matcher(token.getSurfaceForm())
 
           if(token.getSurfaceForm().length() >= 2 && !matcher.find()) {
             if (tokens.get(index).getAllFeaturesArray()(0) == "名詞" && (tokens.get(index).getAllFeaturesArray()(1) == "一般" || tokens.get(index).getAllFeaturesArray()(1) == "固有名詞")) {
               features += tokens.get(index).getSurfaceForm
-
-              println(tokens.get(index).getAllFeaturesArray()(1))
+              //println(tokens.get(index).getAllFeaturesArray()(1))
             } else if (tokens.get(index).getPartOfSpeech == "カスタム名詞") {
-              println(tokens.get(index).getPartOfSpeech)
+              //println(tokens.get(index).getPartOfSpeech)
               // println(tokens.get(index).getSurfaceForm)
               features += tokens.get(index).getSurfaceForm
+              //print(feelCounter.get(tokens.get(index).getSurfaceForm))
             }
           }
         }
       }
-      (features)
-      //(featuresFeeling)
+      //(feelCounter)
+      //単語をキー,感情スコアをvalueにする
+      val feelMap = features.map(tex => (tex,feelingscore))
+      (feelMap)
     })
 
     // ソート方法を定義（必ずソートする前に定義）
@@ -105,25 +109,30 @@ object PieelStreaming {
       override def compare(a: Int, b: Int) = a.compare(b)*(-1)
     }
 
+    //ウィンドウ集計
 
-    // ウインドウ集計（行末の括弧の位置はコメントを入れるためです、気にしないで下さい。）
+    val feelCounts60 = tweetStream.reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
+    ).map{case (topic, count) => (count, topic)  // 単語の感情スコアを集計
+    }.transform(_.sortByKey(true))               // ソート
 
+
+    // ウインドウ集計
+    /**
     val topCounts60 = tweetStream.map((_, 1)                      // 出現回数をカウントするために各単語に「1」を付与
     ).reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
       ).map{case (topic, count) => (count, topic)  // 単語の出現回数を集計
     }.transform(_.sortByKey(true))               // ソート
+      */
 
       /**
-    val topCountsFeeling = tweetStream.map((_, 1)                      // 出現回数をカウントするために各単語に「1」を付与
-    ).reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
-    ).map{case (topic, count) => (count, topic)  // 単語の出現回数を集計
-    }.transform(_.sortByKey(true))               // ソート
+        * val topCountsFeeling = tweetStream.map((_, 1)                      // 出現回数をカウントするために各単語に「1」を付与
+        * ).reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
+        * ).map{case (topic, count) => (count, topic)  // 単語の出現回数を集計
+        * }.transform(_.sortByKey(true))               // ソート
         */
-    // TODO スコアリングはタイトルで1つに集計しなおす必要がある
-    // TODO 俺ガイル, oregaisu => 正式タイトルに直して集計
 
     // 出力
-    topCounts60.foreachRDD(rdd => {
+    feelCounts60.foreachRDD(rdd => {
       //topCountsFeeling.foreachRDD(rdd => {
       // 出現回数上位20単語を取得
 
@@ -136,18 +145,22 @@ object PieelStreaming {
       // コマンドラインに出力
       println("¥ nPopular topics in last 5*60 seconds (%s words):".format(rdd.count()))
       topList.foreach { case (count, tag) =>
-        println("%s (%s tweets)".format(tag, count))
+        println("%s (%s points)".format(tag, count))
         sendMsg.append("%s:%s,".format(tag, count))
       }
       // Send Msg to Kafka
       // TOPスコア順にワードを送信
       println(sendMsg.toString())
+      print()
+
+
     })
     ssc.start()
     ssc.awaitTermination()
   }
 
 }
+
 object CustomTwitterTokenizer{
   def tokenize(text: String, dictPath: String): java.util.List[Token] = {
     Tokenizer.builder().mode(Tokenizer.Mode.SEARCH)
