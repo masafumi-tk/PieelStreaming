@@ -1,22 +1,14 @@
-#Mikasa Recommend System Online Layer
-
 #概要
 
-Spark StreamingでTwitterから発言数を集計しKafkaに送信する
+Spark StreamingでTwitterから発言を感情解析し集計
 
-## Mikasaシステム概要図
+## Pieelシステム概要図
 
 http://tv-anime.xyz/g/mikasa_20150611.png
 
 ##事前に準備するもの
 
 ### Twitter 開発者アカウント
-
-### Kafka
-
-#### Kafka TOPIC 
-* ikazuchi0
-* ikazuchi0.view
 
 ### 設定ファイル
 
@@ -26,11 +18,6 @@ http://tv-anime.xyz/g/mikasa_20150611.png
 
 ユーザー辞書を使用しない場合は./dictionary/blank.txtを指定する
 
-### Mikasa_RS
-
-Kafkaの受信側のプログラムmikasa_rsを起動
-
-
 ## 起動
 
 ``sbt``
@@ -39,6 +26,3 @@ Kafkaの受信側のプログラムmikasa_rsを起動
 
 ``run``
 
-
-## Mikasa System フルインストールマニュアル
-[Mikasa Install Manual](https://gist.github.com/AKB428/c30bc6a979e05fa3a022)
