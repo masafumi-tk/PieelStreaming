@@ -26,7 +26,6 @@ object PieelStreaming {
     */
 
   def main(args: Array[String]): Unit = {
-    //--- Kafka Client Init End
     var configFileName: String = "config/application.properties"
     if (args.length == 1) {
       configFileName = args(0)
@@ -57,9 +56,6 @@ object PieelStreaming {
 
     // 設定ファイルより検索ワードを設定
     val searchWordList = appProperties.getProperty("twitter.searchKeyword").split(",")
-
-    // debug
-    // println(searchWordList(0))
 
     val stream = TwitterUtils.createStream(ssc, None, searchWordList)   //サーチしたい単語がある時
     //val stream = TwitterUtils.createStream(ssc, None) //ランダムに集計したい時
@@ -115,24 +111,18 @@ object PieelStreaming {
     //wordcounterRDD (word,score)の形になっているRDDの各要素にcount用の1を付与し,((word,score),count)の形にする
     //その後RDDの各要素を(word,count)に変更する
     val wordCounter = tweetStream.map((_,1)).map{case ((word,score),count) => (word,count)}
-    val wordCounts60 = wordCounter.reduceByKeyAndWindow(_+_,Seconds(5*60)).map{case (word,count) => (count,word)}.transform(_.sortByKey(true))
+    val wordCounts60 = wordCounter.reduceByKeyAndWindow(_+_,Seconds(5*60))
+        .map{case (word,count) => (count,word)}.transform(_.sortByKey(true))
     //feelCounts 書くwordのfeelingScoreを集計
     val feelCounts60 = tweetStream.reduceByKeyAndWindow(_+_, Seconds(5*60))
-      .map{case (topic, count) => (count, topic)}
-      .transform(_.sortByKey(true))
+        .map{case (topic, count) => (count, topic)}
+        .transform(_.sortByKey(true))
 
-    val wordAndFeelingCounter = wordCounts60.map{case (count,word) => (word,count)}.join(feelCounts60.map{case (score,word2) => (word2,score)}
-        ).map{case (word,(count,score)) => (count,(word,score/count))}.transform(_.sortByKey(true))
-
-
+    val wordAndFeelingCounter = wordCounts60.map{case (count,word) => (word,count)}
+        .join(feelCounts60.map{case (score,word2) => (word2,score)})
+        .map{case (word,(count,score)) => (count,(word,score))}.transform(_.sortByKey(true))
 
     // ウインドウ集計
-    /**
-    val topCounts60 = tweetStream.map((_, 1)                      // 出現回数をカウントするために各単語に「1」を付与
-    ).reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
-      ).map{case (topic, count) => (count, topic)  // 単語の出現回数を集計
-    }.transform(_.sortByKey(true))               // ソート
-      */
 
     /**
       * val topCountsFeeling = tweetStream.map((_, 1)                      // 出現回数をカウントするために各単語に「1」を付与
@@ -143,35 +133,20 @@ object PieelStreaming {
 
     // 出力
     wordAndFeelingCounter.foreachRDD(rdd => {
-      //topCountsFeeling.foreachRDD(rdd => {
-      // 出現回数上位20単語を取得
-
-      // ソート
-      // val rddSort = rdd.map(x => (x,1)).reduceByKey((x,y) => x + y).sortBy(_._2)
-
+      // 出現回数上位(takeRankNum)個の単語を取得
       val sendMsg = new StringBuilder()
-
       val topList = rdd.take(takeRankNum)
       // コマンドラインに出力
       println("¥ nPopular topics in last 5*60 seconds (%s words):".format(rdd.count()))
-      /**
-      topList.foreach { case (count, tag) =>
-        println("%s (%s points)".format(tag, count))
-        sendMsg.append("%s:%s,".format(tag, count))
+      var countRank : Int = 1;
+      topList.foreach{case (count,(word,score)) =>
+        println("%d位:word:%s,count:%d,score:%f".format(countRank,word,count,score/count))
+        sendMsg.append("word:%s,count:%d,score:%f,".format(word,count,score/count))
+        countRank += 1
       }
-        */
-      topList.foreach{ case(count,(word,score)) =>
-          println("word"+ word +",count:"+ count+ ",score:"+score)
-        
-
-      }
-      // Send Msg to Kafka
-      // TOPスコア順にワードを送信
       println(sendMsg.toString())
-      print()
-
-
     })
+
     ssc.start()
     ssc.awaitTermination()
   }
