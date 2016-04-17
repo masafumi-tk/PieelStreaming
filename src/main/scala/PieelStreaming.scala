@@ -3,22 +3,11 @@ import java.util.Properties
 import java.util.regex.{Matcher, Pattern}
 
 import scala.collection.mutable.HashMap
-import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
 import org.apache.spark.streaming.twitter.TwitterUtils
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.atilika.kuromoji.{Token, Tokenizer}
-import com.opencsv.CSVWriter
 
-import scala.collection.mutable
-
-
-/**
-  * Created by AKB428 on 2015/06/05.
-  *
-  * ref:https://github.com/AKB428/inazuma/blob/master/src/main/scala/inazumaTwitter.scala
-  * ref:http://www.intellilink.co.jp/article/column/bigdata-kk01.html
-  */
 object PieelStreaming {
   /**
     *
@@ -59,6 +48,8 @@ object PieelStreaming {
 
     val stream = TwitterUtils.createStream(ssc, None, searchWordList)   //サーチしたい単語がある時
     //val stream = TwitterUtils.createStream(ssc, None) //ランダムに集計したい時
+
+
 
     // Twitterから取得したツイートを処理する
     val tweetStream = stream.flatMap(status => {
@@ -143,6 +134,7 @@ object PieelStreaming {
         println("%d位:word:%s,count:%d,score:%f".format(countRank,word,count,score/count))
         sendMsg.append("word:%s,count:%d,score:%f,".format(word,count,score/count))
         countRank += 1
+
       }
       println(sendMsg.toString())
     })
@@ -185,39 +177,14 @@ object FeelingDictionary{
 
   def setFeelMap(){
     var word : Array[String] = null
-    val source = scala.io.Source.fromFile("dictionary/FeelingScoreJP.txt")
+    val inStream = new FileInputStream("config/application.properties")
+    val appProperties = new Properties()
+    appProperties.load(new InputStreamReader(inStream, "UTF-8"))
+    val source = scala.io.Source.fromFile(appProperties.getProperty("feeling_dictionay_path"))
     source.getLines.foreach({line =>
       word = line.split(":",0)
       feelMap.put(word(0),word(3).toDouble)
     })
     source.close
   }
-}
-object Csvperser{
-  def opencsvToStringArray(args:Array[String]): Unit ={
-
-  }
-  def opencsvToBean(): Unit ={
-
-  }
-  def readFromCsvFile(): Unit ={
-
-  }
-  def writeToCsvFileGeo(args: Array[String]): Unit ={
-
-    var writer = new CSVWriter(new FileWriter("output/outPutGeo.csv",true))
-    var strArr = args
-    writer.writeNext(strArr)
-    writer.flush()
-  }
-  def writeToCsvFile(args: Array[String]): Unit ={
-
-    var writer = new CSVWriter(new FileWriter("output/outPut.csv",true))
-    var strArr = args
-    writer.writeNext(strArr)
-    writer.flush()
-  }
-  //  def isFileValid(): Unit ={
-  //
-  //  }
 }
