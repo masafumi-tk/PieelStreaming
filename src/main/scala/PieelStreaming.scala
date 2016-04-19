@@ -1,4 +1,4 @@
-import java.io.{FileInputStream, FileWriter, InputStreamReader}
+import java.io.{FileInputStream,InputStreamReader}
 import java.util.Properties
 import java.util.regex.{Matcher, Pattern}
 
@@ -28,7 +28,6 @@ object PieelStreaming {
     val dictFilePath = appProperties.getProperty("kuromoji.dict_path")
     val takeRankNum = appProperties.getProperty("take_rank_num").toInt
 
-    // TODO @AKB428 サンプルコードがなぜかシステム設定になってるのでプロセス固有に設定できるように直せたら直す
     System.setProperty("twitter4j.oauth.consumerKey", appProperties.getProperty("twitter.consumer_key"))
     System.setProperty("twitter4j.oauth.consumerSecret", appProperties.getProperty("twitter.consumer_secret"))
     System.setProperty("twitter4j.oauth.accessToken", appProperties.getProperty("twitter.access_token"))
@@ -47,7 +46,7 @@ object PieelStreaming {
     val searchWordList = appProperties.getProperty("twitter.searchKeyword").split(",")
 
     val stream = TwitterUtils.createStream(ssc, None, searchWordList)   //サーチしたい単語がある時
-    //val stream = TwitterUtils.createStream(ssc, None) //ランダムに集計したい時
+    //val stream = TwitterUtils.createStream(ssc, None) //ランダムに集計したい時(おそらく全体の1%を取得)
 
 
 
@@ -101,6 +100,7 @@ object PieelStreaming {
 
     //wordcounterRDD (word,score)の形になっているRDDの各要素にcount用の1を付与し,((word,score),count)の形にする
     //その後RDDの各要素を(word,count)に変更する
+
     val wordCounter = tweetStream.map((_,1)).map{case ((word,score),count) => (word,count)}
     val wordCounts60 = wordCounter.reduceByKeyAndWindow(_+_,Seconds(5*60))
         .map{case (word,count) => (count,word)}.transform(_.sortByKey(true))
@@ -117,7 +117,7 @@ object PieelStreaming {
 
     /**
       * val topCountsFeeling = tweetStream.map((_, 1)                      // 出現回数をカウントするために各単語に「1」を付与
-      * ).reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(60*60sec)に含まれる単語を集める
+      * ).reduceByKeyAndWindow(_+_, Seconds(5*60)   // ウインドウ幅(5*60sec)に含まれる単語を集める
       * ).map{case (topic, count) => (count, topic)  // 単語の出現回数を集計
       * }.transform(_.sortByKey(true))               // ソート
       */
@@ -180,7 +180,7 @@ object FeelingDictionary{
     val inStream = new FileInputStream("config/application.properties")
     val appProperties = new Properties()
     appProperties.load(new InputStreamReader(inStream, "UTF-8"))
-    val source = scala.io.Source.fromFile(appProperties.getProperty("feeling_dictionay_path"))
+    val source = scala.io.Source.fromFile(appProperties.getProperty("feeling.dict_path"))
     source.getLines.foreach({line =>
       word = line.split(":",0)
       feelMap.put(word(0),word(3).toDouble)
