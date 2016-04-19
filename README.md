@@ -2,13 +2,8 @@
 
 Spark StreamingでTwitterから発言を感情解析し集計
 
-## Pieelシステム概要図
-
-http://tv-anime.xyz/g/mikasa_20150611.png
-
 ##事前に準備するもの
-
-### Twitter 開発者アカウント
+Twitterの開発者アカウント
 
 ### 設定ファイル
 
