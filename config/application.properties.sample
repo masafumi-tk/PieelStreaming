@@ -1,0 +1,11 @@
+kuromoji.dict_path=./dictionary/anime_2015_2Q.txt
+
+feeling.dict_path=./dictionary/FeelingScoreJP.txt
+
+take_rank_num=40
+
+twitter.consumer_key=
+twitter.consumer_secret=
+twitter.access_token=
+twitter.access_token_secret=
+twitter.searchKeyword=
